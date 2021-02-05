@@ -1,6 +1,6 @@
 name: cloud
-title: Public Cloud Documentation
+title: VSHN Third-Party Public Cloud
 version: master
 start_page: ROOT:index.adoc
 nav:
-- modules/ROOT/nav.adoc
+- modules/ROOT/partials/nav.adoc
