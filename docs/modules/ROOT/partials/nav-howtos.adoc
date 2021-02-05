@@ -1,0 +1,2 @@
+* cloudscale.ch
+** xref:cloud:ROOT:how-tos/cloudscale/public_network.adoc[Manually add a public network]

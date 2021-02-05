@@ -1,0 +1,98 @@
+= How to manually add a public network
+
+[WARNING]
+--
+PLEASE READ THIS WARNING CAREFULLY!
+
+tl;dr: interface names will change on power-off! Ensure you power-off the VM after network interfaces has been added.
+
+When hot-adding interfaces, they will be attached to the next available (virtual) PCI slot, in Ubuntu this will usually be 00:06.0 leading to an interface name of eno6.
+When a VM is turned off completely (power-off via shutdown/control.cloudscale.ch) the VM will be recreated when powering on. When creating a VM OpenStack will add all network-adapters on block, leading to different PCI slot:
+
+Example hotplug:
+
+----
+00:00.0 Host bridge: Intel Corporation 440FX - 82441FX PMC [Natoma] (rev 02)
+00:01.0 ISA bridge: Intel Corporation 82371SB PIIX3 ISA [Natoma/Triton II]
+00:01.1 IDE interface: Intel Corporation 82371SB PIIX3 IDE [Natoma/Triton II]
+00:01.2 USB controller: Intel Corporation 82371SB PIIX3 USB [Natoma/Triton II] (rev 01)
+00:01.3 Bridge: Intel Corporation 82371AB/EB/MB PIIX4 ACPI (rev 03)
+00:02.0 VGA compatible controller: Cirrus Logic GD 5446
+00:03.0 Ethernet controller: Red Hat, Inc. Virtio network device
+00:04.0 SCSI storage controller: Red Hat, Inc. Virtio block device
+00:05.0 Unclassified device [00ff]: Red Hat, Inc. Virtio memory balloon
+00:06.0 Ethernet controller: Red Hat, Inc. Virtio network device
+----
+
+Same VM after power-off/power-on:
+
+----
+00:00.0 Host bridge: Intel Corporation 440FX - 82441FX PMC [Natoma] (rev 02)
+00:01.0 ISA bridge: Intel Corporation 82371SB PIIX3 ISA [Natoma/Triton II]
+00:01.1 IDE interface: Intel Corporation 82371SB PIIX3 IDE [Natoma/Triton II]
+00:01.2 USB controller: Intel Corporation 82371SB PIIX3 USB [Natoma/Triton II] (rev 01)
+00:01.3 Bridge: Intel Corporation 82371AB/EB/MB PIIX4 ACPI (rev 03)
+00:02.0 VGA compatible controller: Cirrus Logic GD 5446
+00:03.0 Ethernet controller: Red Hat, Inc. Virtio network device
+00:04.0 Ethernet controller: Red Hat, Inc. Virtio network device
+00:05.0 SCSI storage controller: Red Hat, Inc. Virtio block device
+00:06.0 Unclassified device [00ff]: Red Hat, Inc. Virtio memory balloon
+----
+
+(warning) Interface name has changed from eno6 to eno4
+
+This could be addressed by adding persistent interface names using udev rules (f.e. based on mac-address), however there is currently no support for that in our puppet managed VMs
+--
+
+== Steps
+
+. Get a cloudscale.ch API token
++
+----
+TOKEN="xxxxxxxxxxxxxxxx"
+----
+
+. Set a AUTH_HEADER variable
++
+----
+AUTH_HEADER="Authorization: Bearer ${TOKEN}"
+----
+ 
+. Get a server uuid and write down the interfaces vm currently has
++
+----
+curl -s -H "$AUTH_HEADER" -H "Content-Type: application/json" -X GET https://api.cloudscale.ch/v1/servers
+UUID="set-the-uuid-here"
+----
+ 
+. Network can also be checked with
++
+----
+curl -i -H "$AUTH_HEADER" -H "Content-Type: application/json" -X GET https://api.cloudscale.ch/v1/networks
+----
+ 
+. Attach a public interface to interfaces list => `{"network": "public"}``, do not forget to append the networks vm currently has
++
+----
+curl -i -H "$AUTH_HEADER" -H "Content-Type: application/json" -X PATCH --data '{"interfaces": [{"network": "public"}, {"network": "NETWORK-UUID-THAT-VM-CURRENTLY-HAS"}]}' "https://api.cloudscale.ch/v1/servers/${UUID}"
+----
+ 
+. Interface should now be visible in the cloudscale.ch panel in browse, with the assigned ip
+ 
+. Shut down and start the machine
+ 
+. Check out the new interface name (`ifconfig -a`)
+ 
+. Update the interface file e.g. `vim /etc/network/interfaces.d/ens4.cfg`
++
+----
+auto ens4
+iface ens4 inet static
+  address 5.102.146.111
+  netmask 24
+  gateway 5.102.146.1
+iface ens4 inet6 static
+  address 2a06:c01:1:1103::111
+  netmask 64
+  gateway fe80::1
+----
